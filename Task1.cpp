@@ -40,7 +40,7 @@ int *full_array(int n)
 	mt19937 mersenne(rd());
 	for (int i = 0; i < n; i++)
 	{
-		arr[i] = 0 + mersenne() % 1000;
+		arr[i] = 0 + mersenne() % 100;
 	}
 
 	return arr;
@@ -51,14 +51,12 @@ int parallel_array_sum(int* arr, int n, int m)
 	int sum = 0;
 	#pragma omp parallel reduction(+:sum) num_threads(m)
 	{
-		int threads_num = omp_get_num_threads();
 		int id = omp_get_thread_num();
-		for (int i = id * n / threads_num; i < (id + 1) * n / threads_num; i++)
+		for (int i = (id * n) / m ; i < ((id + 1) * n) / m; i++)
 		{
 			sum += arr[i];
 		}
 	}
-
 	return sum;
 }
 
@@ -95,12 +93,11 @@ bool parallel_and_straight_time(int *arr, int n, int m)
 int find_M(int threads_num, int k)
 {
 	bool res = false;
-	int n = 10;
-	int* arr;
+	int n = 1;
 	while (!res)
 	{
 		n *= k;
-		arr = full_array(n);
+		int* arr = full_array(n);
 		res = parallel_and_straight_time(arr, n, threads_num);
 		cout << res << endl;
 	}
@@ -116,7 +113,6 @@ int hybrid_array_sum(int *arr, int n, int m, string filename)
 		sum = straight_array_sum(arr, n);
 	else
 		sum = parallel_array_sum(arr, n, m);
-	//ceil(float(n / M))
 	return sum;
 }
 
@@ -131,14 +127,14 @@ void Task1(int n, int threads_num)
 	cout << endl;
 }
 
-void Task2(int threads_num, int k, string filename)
+void Task2(int threads_num, int k, int r, string filename)
 {
 	cout << "Task 2" << endl;
 	int M = find_M(threads_num, k);
-	for (int i = 1, j = 0; i < 10; i++)
+	for (int i = 1, j = 0; i < r; i++)
 	{
 		j = find_M(threads_num, k);
-		if (j < M)
+		if (j > M)
 			M = j;
 	}
 	cout << "minimum M = " << M << endl;
@@ -168,20 +164,27 @@ void Task3(int m, string filename)
 	printf("Straight %f seconds\n", double(t1) / CLOCKS_PER_SEC);
 
 	printf("sum parallel = %i, sum straight = %i - ", sum, sum1);
-	cout << (sum == sum1 ? "true\n" : "false\n");
+	cout << (sum == sum1 ? "true\n\n" : "false\n\n");
 }
 
 void draw_histogram(float* x, int k, float min, float max)
 {
+	float r = 0.001;
+
 	int equalizer = to_string(k).length();
+	int equalizer2 = ceil((max - min) / r);
 	
-	cout << string((equalizer - 2) / 2, ' ') << "threads num" << string((equalizer - 2) / 2, ' ') << endl;
+	cout << string((equalizer - 2) / 2, ' ') << "threads num" << string((equalizer - 2) / 2, ' ') << "  speed" << endl;
 	for (int i = 1; i <= k; i++)
 	{
+		int m = 0;
 		cout << "     " << i << string(equalizer, ' ') << "     ";
-		for (float j = 0; j <= x[i - 1]; j += min)
+		for (float j = 0.; j <= x[i - 1] - min; j += r) 
+		{
 			cout << "|";
-		cout << string(ceil((max - x[i - 1]) / min) + 1, ' ') << " [" << x[i - 1] << " secs]\n";
+			m++;
+		}
+		cout << string(equalizer2 - m + 5, ' ') << " [" << x[i - 1] << " secs]\n";
 		if (to_string(i + 1).length() > to_string(i).length())
 			equalizer--;
 	}
@@ -189,23 +192,34 @@ void draw_histogram(float* x, int k, float min, float max)
 
 void Task4(int k, string filename)
 {
+	cout << "Task 4" << endl;
 	int M = stoi(read_from_file(filename));
 	int n = 2 * M;
 	int* arr = full_array(n);
 	float* x = new float[k];
-	float min = 100.;
-	float max = 0.;
-	for (int i = 1; i <= k; i++)
+
+	clock_t t = clock();
+	int sum = straight_array_sum(arr, n);
+	x[0] = float(clock() - t) / CLOCKS_PER_SEC;
+	float min = x[0];
+	float max = x[0];
+
+	for (int i = 2; i <= k; i++)
 	{
-		clock_t t = clock();
-		hybrid_array_sum(arr, n, 2, filename);
+		t = clock();
+		int sum1 = hybrid_array_sum(arr, n, i, filename);
 		t = clock() - t;
 		x[i - 1] = float(t) / CLOCKS_PER_SEC;
+		if (sum1 != sum)
+		{
+			cout << "FALSE" << endl;
+			return;
+			//cout << n << ", count - " << count << " " << i << " " << sum << " " << sum1 << " " << sum - sum1;
+		}
 		if (x[i - 1] < min && x[i - 1] > 0.)
 			min = x[i - 1];
-		else
-			if (x[i - 1] > max)
-				max = x[i - 1];
+		if (x[i - 1] > max)
+			max = x[i - 1];
 	}
 	draw_histogram(x, k, min, max);
 }
@@ -214,9 +228,9 @@ int main()
 {
 	string filename = "M.txt";
 	Task1(100, 3);
-	Task2(2, 10, filename);
+	Task2(2, 10, 10, filename);
 	Task3(8, filename);
-	Task4(25, filename);
+	Task4(50, filename);
 
 	return 0;
 }
